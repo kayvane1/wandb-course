@@ -1,0 +1,9 @@
+torch==1.11.0+cu113
+torchaudio==0.11.0+cu113
+torchsummary==1.5.1
+torchtext==0.12.0
+torchvision==0.12.0+cu113
+transformers==4.20.1
+wandb==0.12.20
+datasets==2.3.2
+ml-collections==0.1.1
