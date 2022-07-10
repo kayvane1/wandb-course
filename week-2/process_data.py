@@ -21,7 +21,7 @@ default_cfg.DATA_PROCESSING_JOB_TYPE = "process-data"
 default_cfg.SPLIT_DATA_JOB_TYPE = "split-data"
 # WANDB ARTIFACT NAMES
 default_cfg.RAW_DATA_ARTIFACT = "complaints_raw_data"
-default_cfg.PROCESSED_DATA_ARTIFACT = "complaints_raw_data"
+default_cfg.PROCESSED_DATA_ARTIFACT = "complaints_processed_data"
 default_cfg.TRAIN_DATA_ARTIFACT = "complaints_train_data"
 default_cfg.TEST_DATA_ARTIFACT = "complaints_test_data"
 # DATA FOLDERS
@@ -91,10 +91,6 @@ def process_and_log_data(cfg):
 
         tokenizer = AutoTokenizer.from_pretrained(cfg.model_name)
 
-        # tokenizer helper function
-        def _tokenize(batch):
-            return tokenizer(batch["text"], padding='max_length', truncation=True)
-
         # By including `use_artifact` we're logging the usage to W&B and can track it as part of the lineage
         text_artifact = run.use_artifact(f'{cfg.RAW_DATA_ARTIFACT}:latest')
         _ = text_artifact.download(root=cfg.RAW_DATA_FOLDER)
@@ -114,9 +110,6 @@ def process_and_log_data(cfg):
 
         # Filtering out empty/no-text complaints
         processed_data = processed_data.filter(lambda example: len(example['text'])>0)
-
-        # tokenize dataset
-        processed_data = processed_data.map(_tokenize, batched=True)
 
         processed_data.save_to_disk(cfg.PROCESSED_DATA_FOLDER)
         # Create and log the raw data artifact

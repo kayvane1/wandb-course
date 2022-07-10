@@ -1,8 +1,6 @@
 import argparse
-from torch import tensor, nn, device, cuda
-from transformers import AutoTokenizer, TrainingArguments, Trainer, AutoModelForSequenceClassification, DataCollatorWithPadding
+from transformers import AutoTokenizer, AutoConfig, TrainingArguments, Trainer, AutoModelForSequenceClassification, DataCollatorWithPadding
 from transformers.trainer_callback import EarlyStoppingCallback
-from huggingface_hub import HfFolder
 from datasets import load_metric, load_from_disk
 import numpy as np
 import pandas as pd
@@ -75,6 +73,32 @@ def compute_metrics(eval_pred):
       "precision" : precision["precision"]
   }
 
+def load_data(run, cfg):
+
+        # By including `use_artifact` we're logging the usage to W&B and can track it as part of the lineage
+        train_artifact = run.use_artifact(f'{cfg.TRAIN_DATA_ARTIFACT}:latest')
+        _ = train_artifact.download(root=cfg.TRAIN_DATA_FOLDER)
+        train_dataset = load_from_disk(cfg.TRAIN_DATA_FOLDER)
+
+        test_dataset = run.use_artifact(f'{cfg.TEST_DATA_ARTIFACT}:latest')
+        _ = test_dataset.download(root=cfg.TEST_DATA_FOLDER)
+        test_dataset = load_from_disk(cfg.TEST_DATA_FOLDER)
+        
+        tokenizer = AutoTokenizer.from_pretrained(cfg.model_name)
+
+        # tokenizer helper function
+        def _tokenize(batch):
+            return tokenizer(batch["text"], padding='max_length', truncation=True)
+
+        # tokenize dataset
+        train_dataset = train_dataset.map(_tokenize, batched=True)
+        test_dataset = test_dataset.map(_tokenize, batched=True)
+
+        # set format for pytorch
+        train_dataset.set_format('torch', columns=['input_ids', 'attention_mask', 'labels'])
+        test_dataset.set_format('torch', columns=['input_ids', 'attention_mask', 'labels'])
+
+        return train_dataset, test_dataset
 def train(cfg):
 
     with wandb.init(project=cfg.PROJECT_NAME, job_type=cfg.MODEL_TRAINING_JOB_TYPE, config=dict(cfg)) as run:
@@ -106,20 +130,7 @@ def train(cfg):
         hub_model_id=f"{cfg.model_name}-{cfg.PROJECT_NAME}",
         )
 
-        tokenizer = AutoTokenizer.from_pretrained(cfg.model_name)
-
-        # By including `use_artifact` we're logging the usage to W&B and can track it as part of the lineage
-        train_artifact = run.use_artifact(f'{cfg.TRAIN_DATA_ARTIFACT}:latest')
-        _ = train_artifact.download(root=cfg.TRAIN_DATA_FOLDER)
-        train_dataset = load_from_disk(cfg.TRAIN_DATA_FOLDER)
-
-        test_dataset = run.use_artifact(f'{cfg.TEST_DATA_ARTIFACT}:latest')
-        _ = test_dataset.download(root=cfg.TEST_DATA_FOLDER)
-        test_dataset = load_from_disk(cfg.TEST_DATA_FOLDER)
-
-        # set format for pytorch
-        train_dataset.set_format('torch', columns=['input_ids', 'attention_mask', 'labels'])
-        test_dataset.set_format('torch', columns=['input_ids', 'attention_mask', 'labels'])
+        train_dataset, test_dataset = load_data(run, cfg)
 
         # Used to encode the labels
         label2id = train_dataset.features["labels"].str2int
@@ -130,9 +141,12 @@ def train(cfg):
 
         # define data_collator
         data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+        
+        tokenizer = AutoTokenizer.from_pretrained(cfg.model_name)
+        config = AutoConfig.from_pretrained(cfg.model_name, num_labels=number_classes)
 
         model = AutoModelForSequenceClassification.from_pretrained(
-        cfg.model_name, num_labels=number_classes
+        cfg.model_name, num_labels=number_classes, config=config
         )
 
         trainer = Trainer(
