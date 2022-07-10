@@ -1,6 +1,6 @@
 import argparse
 from pathlib import Path
-from datasets import load_dataset
+from datasets import load_dataset, load_from_disk
 import numpy as np
 import pandas as pd
 import wandb
@@ -31,9 +31,9 @@ default_cfg.TRAIN_DATA_FOLDER = 'complaints-dataset/train'
 default_cfg.TEST_DATA_FOLDER = 'complaints-dataset/test'
 # DATASET COLUMNS TO KEEP
 default_cfg.dataset = "consumer-finance-complaints"
-default_cfg.text_column = "Complaints Text"
+default_cfg.text_column = "Complaint Text"
 default_cfg.target_column = "Sub Product"
-default_cfg.split_perc = 15
+default_cfg.split_perc = 10
 # TRANSFORMERS PARAMETERS
 default_cfg.model_name = "distilbert-base-uncased"
 
@@ -45,10 +45,6 @@ def parse_args():
     argparser.add_argument('--target_column', type=str, default=default_cfg.target_column, help='Column in the dataset which should be used to as the target for predictions')
     argparser.add_argument('--split_perc', type=int, default=default_cfg.split_perc, help='percentage of the dataset to used')
     return argparser.parse_args()
-
-# tokenizer helper function
-def tokenize(batch, tokenizer):
-    return tokenizer(batch["text"], padding='max_length', truncation=True)
 
 def log_raw_data(cfg):
     """
@@ -66,7 +62,7 @@ def log_raw_data(cfg):
         
         cfg = wandb.config
 
-        if split_percentage is not None:
+        if cfg.split_perc is not None:
             split_percentage = f"train[:{cfg.split_perc}%]"
         
         # Loading consumer complaints dataset - Note: This is a big dataset
@@ -95,25 +91,32 @@ def process_and_log_data(cfg):
 
         tokenizer = AutoTokenizer.from_pretrained(cfg.model_name)
 
+        # tokenizer helper function
+        def _tokenize(batch):
+            return tokenizer(batch["text"], padding='max_length', truncation=True)
+
         # By including `use_artifact` we're logging the usage to W&B and can track it as part of the lineage
-        text_dataset = run.use_artifact(f'{cfg.RAW_DATA_ARTIFACT}:latest')
+        text_artifact = run.use_artifact(f'{cfg.RAW_DATA_ARTIFACT}:latest')
+        _ = text_artifact.download(root=cfg.RAW_DATA_FOLDER)
+        text_dataset = load_from_disk(cfg.RAW_DATA_FOLDER)
+
 
         # Extracting the target column, there is only one split at this point (train)
         columns = text_dataset.column_names
 
         # Remove the columns which aren't in scope for us
-        remove_cols = [e for e in columns if e not in (cfg.TEXT_COLUMN, cfg.TARGET_COLUMN)]
+        remove_cols = [e for e in columns if e not in (cfg.text_column, cfg.target_column)]
         processed_data = text_dataset.remove_columns(remove_cols)
 
         # Renaming the columns to the names expected by the classifier
-        processed_data = processed_data.rename_column(cfg.TEXT_COLUMN, "text")
-        processed_data = processed_data.rename_column(cfg.TARGET_COLUMN, "labels")
+        processed_data = processed_data.rename_column(cfg.text_column, "text")
+        processed_data = processed_data.rename_column(cfg.target_column, "labels")
 
         # Filtering out empty/no-text complaints
         processed_data = processed_data.filter(lambda example: len(example['text'])>0)
 
         # tokenize dataset
-        processed_data = processed_data.map(tokenize(tokenizer), batched=True)
+        processed_data = processed_data.map(_tokenize, batched=True)
 
         processed_data.save_to_disk(cfg.PROCESSED_DATA_FOLDER)
         # Create and log the raw data artifact
@@ -139,7 +142,9 @@ def split_and_log_data(cfg):
         cfg = wandb.config
 
         # By including `use_artifact` we're logging the usage to W&B and can track it as part of the lineage
-        processed_data = run.use_artifact(f'{cfg.PROCESSED_DATA_ARTIFACT}:latest')
+        processed_artifact = run.use_artifact(f'{cfg.PROCESSED_DATA_ARTIFACT}:latest')
+        _ = processed_artifact.download(root=cfg.PROCESSED_DATA_FOLDER)
+        processed_data = load_from_disk(cfg.PROCESSED_DATA_FOLDER)
 
         # Splitting the dataset into training and validation datasets
         split_data = processed_data.train_test_split(test_size=0.2,seed=0)

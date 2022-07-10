@@ -3,7 +3,7 @@ from torch import tensor, nn, device, cuda
 from transformers import AutoTokenizer, TrainingArguments, Trainer, AutoModelForSequenceClassification, DataCollatorWithPadding
 from transformers.trainer_callback import EarlyStoppingCallback
 from huggingface_hub import HfFolder
-from datasets import load_metric
+from datasets import load_metric, load_from_disk
 import numpy as np
 import pandas as pd
 from ml_collections import config_dict
@@ -43,12 +43,12 @@ default_cfg.HUB_STRATEGY = "every_save"
 def parse_args():
     "Overriding default argments"
     argparser = argparse.ArgumentParser(description='Process base parameters & hyper-parameters')
-    argparser.add_argument('--model_name', type=int, default=default_cfg.model_name, help='Base Model Architecture to use')
+    argparser.add_argument('--model_name', type=str, default=default_cfg.model_name, help='Base Model Architecture to use')
     argparser.add_argument('--num_epochs', type=int, default=default_cfg.num_epochs, help='number of training epochs')
     argparser.add_argument('--train_batch_size', type=int, default=default_cfg.train_batch_size, help='train batch size')
     argparser.add_argument('--eval_batch_size', type=int, default=default_cfg.eval_batch_size, help='eval batch size')
-    argparser.add_argument('--warmup_steps', type=float, default=default_cfg.warmup_steps, help='warmup steps')
-    argparser.add_argument('--learning_rate', type=str, default=default_cfg.learning_rates, help='learning rate to use')
+    argparser.add_argument('--warmup_steps', type=int, default=default_cfg.warmup_steps, help='warmup steps')
+    argparser.add_argument('--learning_rate', type=float, default=default_cfg.learning_rate, help='learning rate to use')
     argparser.add_argument('--fp16', type=str, default=default_cfg.fp16, help='Whether to use floating point precision')
     argparser.add_argument('--log_model', action="store_true", help='log best model W&B')
     return argparser.parse_args()
@@ -83,12 +83,12 @@ def train(cfg):
     
         training_args = TrainingArguments(
         output_dir=cfg.MODEL_DATA_FOLDER,
-        num_train_epochs=cfg.NUM_EPOCHS,
-        per_device_train_batch_size=cfg.TRAIN_BATCH_SIZE,
-        per_device_eval_batch_size=cfg.EVAL_BATCH_SIZE,
-        warmup_steps=cfg.WARMUP_STEPS,
-        fp16=cfg.FP16,
-        learning_rate=float(cfg.LEARNING_RATE),
+        num_train_epochs=cfg.num_epochs,
+        per_device_train_batch_size=cfg.train_batch_size,
+        per_device_eval_batch_size=cfg.eval_batch_size,
+        warmup_steps=cfg.warmup_steps,
+        fp16=cfg.fp16,
+        learning_rate=float(cfg.learning_rate),
         # logging & evaluation strategies
         logging_dir=f"{cfg.MODEL_DATA_FOLDER}/logs",
         logging_steps=50, 
@@ -109,19 +109,24 @@ def train(cfg):
         tokenizer = AutoTokenizer.from_pretrained(cfg.model_name)
 
         # By including `use_artifact` we're logging the usage to W&B and can track it as part of the lineage
-        train_dataset = run.use_artifact(f'{cfg.TRAIN_DATA_ARTIFACT}:latest')
+        train_artifact = run.use_artifact(f'{cfg.TRAIN_DATA_ARTIFACT}:latest')
+        _ = train_artifact.download(root=cfg.TRAIN_DATA_FOLDER)
+        train_dataset = load_from_disk(cfg.TRAIN_DATA_FOLDER)
+
         test_dataset = run.use_artifact(f'{cfg.TEST_DATA_ARTIFACT}:latest')
+        _ = test_dataset.download(root=cfg.TEST_DATA_FOLDER)
+        test_dataset = load_from_disk(cfg.TEST_DATA_FOLDER)
 
         # set format for pytorch
         train_dataset.set_format('torch', columns=['input_ids', 'attention_mask', 'labels'])
         test_dataset.set_format('torch', columns=['input_ids', 'attention_mask', 'labels'])
 
         # Used to encode the labels
-        label2id = train_dataset.features["label"].str2int
+        label2id = train_dataset.features["labels"].str2int
 
         # Used later to initialise the model
-        number_classes = train_dataset.features["label"].num_classes
-        id2label = train_dataset.features["label"].int2str
+        number_classes = train_dataset.features["labels"].num_classes
+        id2label = train_dataset.features["labels"].int2str
 
         # define data_collator
         data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
@@ -145,3 +150,7 @@ def train(cfg):
 
         if cfg.log_model:
             trainer.save_model()
+
+if __name__ == '__main__':
+    default_cfg.update(vars(parse_args()))
+    train(default_cfg)
