@@ -13,7 +13,9 @@ import numpy as np
 import pandas as pd
 from ml_collections import config_dict
 import wandb
+import os
 
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # defaults
 default_cfg = config_dict.ConfigDict()
@@ -34,10 +36,10 @@ default_cfg.TEST_DATA_FOLDER = "complaints-dataset/test"
 default_cfg.MODEL_DATA_FOLDER = "complaints-model"
 # TRANSFORMERS PARAMETERS
 default_cfg.model_name = "distilbert-base-uncased"
-default_cfg.num_epochs = 3
+default_cfg.num_epochs = 2
 default_cfg.train_batch_size = 32
 default_cfg.eval_batch_size = 32
-default_cfg.warmup_steps = 500
+default_cfg.warmup_steps = 1500
 default_cfg.learning_rate = 5e-5
 default_cfg.fp16 = True
 # HUB PARAMETERS
@@ -194,10 +196,10 @@ def train(cfg):
         number_classes = train_dataset.features["labels"].num_classes
         id2label = train_dataset.features["labels"].int2str
 
+        tokenizer = AutoTokenizer.from_pretrained(cfg.model_name)
+        
         # define data_collator
         data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
-
-        tokenizer = AutoTokenizer.from_pretrained(cfg.model_name)
 
         model = AutoModelForSequenceClassification.from_pretrained(
             cfg.model_name,
