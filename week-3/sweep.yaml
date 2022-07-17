@@ -1,0 +1,25 @@
+program: train.py
+method: random
+project: wandb-week-2-complaints-classifier
+metric:
+  name: f1
+  goal: maximize
+early_terminate:
+  type: hyperband
+  min_iter: 3
+parameters:
+  train_batch_size:
+    value: 16
+  eval_batch_size:
+    value: 16
+  warmup_steps:
+    values: [256, 512, 1024]
+  model_name:
+    values:
+      - 'distilbert-base-uncased'
+      - 'distilroberta-base'
+      - 'microsoft/deberta-base-mnli'
+  learning_rate:
+    distribution: 'log_uniform_values'
+    min: 1e-5
+    max: 1e-3
