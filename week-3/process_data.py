@@ -5,13 +5,14 @@ import numpy as np
 import pandas as pd
 import wandb
 from ml_collections import config_dict
-from transformers import AutoTokenizer
+from datetime import datetime
+
 
 # defaults
 default_cfg = config_dict.ConfigDict()
 
 # WANDB BASE PARAMETERS
-default_cfg.PROJECT_NAME = "wandb-week-2-complaints-classifier"
+default_cfg.PROJECT_NAME = "wandb-week-3-complaints-classifier"
 # WANDB ARTIFACT TYPES
 default_cfg.DATASET_TYPE = "dataset"
 default_cfg.MODEL_TYPE = "model"
@@ -34,11 +35,10 @@ default_cfg.VAL_DATA_FOLDER = "complaints-dataset/val"
 # DATASET COLUMNS TO KEEP
 default_cfg.dataset = "consumer-finance-complaints"
 default_cfg.text_column = "Complaint Text"
-default_cfg.target_column = "Sub Product"
+default_cfg.target_column = "Product"
+default_cfg.date_field = "Date Received"
 default_cfg.split_perc = 10
 default_cfg.end_training_data = "01/06/2022"
-# TRANSFORMERS PARAMETERS
-default_cfg.model_name = "distilbert-base-uncased"
 
 
 def parse_args():
@@ -98,12 +98,9 @@ def log_raw_data(cfg):
 
         cfg = wandb.config
 
-        if cfg.split_perc is not None:
-            split_percentage = f"train[:{cfg.split_perc}%]"
-
         # Loading consumer complaints dataset - Note: This is a big dataset
         text_dataset = load_dataset(
-            default_cfg.dataset, split=split_percentage, ignore_verifications=True
+            default_cfg.dataset, ignore_verifications=True
         )
         text_dataset.save_to_disk(cfg.RAW_DATA_FOLDER)
         # Create and log the raw data artifact
@@ -131,19 +128,17 @@ def process_and_log_data(cfg):
 
         cfg = wandb.config
 
-        tokenizer = AutoTokenizer.from_pretrained(cfg.model_name)
-
         # By including `use_artifact` we're logging the usage to W&B and can track it as part of the lineage
         text_artifact = run.use_artifact(f"{cfg.RAW_DATA_ARTIFACT}:latest")
         _ = text_artifact.download(root=cfg.RAW_DATA_FOLDER)
         text_dataset = load_from_disk(cfg.RAW_DATA_FOLDER)
 
         # Extracting the target column, there is only one split at this point (train)
-        columns = text_dataset.column_names
+        columns = text_dataset["train"].column_names
 
         # Remove the columns which aren't in scope for us
         remove_cols = [
-            e for e in columns if e not in (cfg.text_column, cfg.target_column)
+            e for e in columns if e not in (cfg.text_column, cfg.target_column, cfg.date_field)
         ]
         processed_data = text_dataset.remove_columns(remove_cols)
 
@@ -186,13 +181,17 @@ def split_and_log_data(cfg):
         _ = processed_artifact.download(root=cfg.PROCESSED_DATA_FOLDER)
         processed_data = load_from_disk(cfg.PROCESSED_DATA_FOLDER)
 
-        val_dataset = processed_data.filter(lambda example: example["Received Data"] > cfg.end_training_data)
-        ##TODO: rename dataset fold to val
+        end_date = datetime.strptime(cfg.end_training_data, '%d/%m/%Y')
 
-        processed_data = processed_data.filter(lambda example: example["Received Data"] < cfg.end_training_data)
+        val_dataset = processed_data.filter(lambda example: example["Date Received"] > end_date)
+
+        processed_data = processed_data.filter(lambda example: example["Date Received"] < end_date)
+
+        if cfg.split_perc is not None:
+            processed_data = processed_data.train_test_split(test_size=100-cfg.split_perc, seed=0)
 
         # Splitting the dataset into training and validation datasets
-        split_data = processed_data.train_test_split(test_size=0.2, seed=0)
+        split_data = processed_data["train"].train_test_split(test_size=0.2, seed=0)
 
         train_dataset = split_data["train"]
         train_dataset.save_to_disk(cfg.TRAIN_DATA_FOLDER)
@@ -200,7 +199,7 @@ def split_and_log_data(cfg):
         test_dataset = split_data["test"]
         test_dataset.save_to_disk(cfg.TEST_DATA_FOLDER)
 
-        val_dataset = val_dataset["val"] 
+        val_dataset = val_dataset["train"] 
         val_dataset.save_to_disk(cfg.VAL_DATA_FOLDER)
 
         # Create and log the train data artifact
