@@ -14,6 +14,7 @@ import pandas as pd
 from ml_collections import config_dict
 import wandb
 import os
+from wandb.beta.workflows import log_model, use_model
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -21,7 +22,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 default_cfg = config_dict.ConfigDict()
 
 # WANDB BASE PARAMETERS
-default_cfg.PROJECT_NAME = "wandb-week-2-complaints-classifier"
+default_cfg.PROJECT_NAME = "wandb-week-3-complaints-classifier"
 # WANDB ARTIFACT TYPES
 default_cfg.DATASET_TYPE = "dataset"
 default_cfg.MODEL_TYPE = "model"
@@ -222,6 +223,12 @@ def train(cfg):
 
         if cfg.log_model:
             trainer.save_model()
+
+# def get_champion_metrics(cfg):
+#     champion_model = use_model("model-registry/sub-product-classification").model_obj()
+#     champion_model.load_state_dict(torch.load(cfg.champion_model_path))
+#     champion_model.eval()
+#     return champion_model
 
 
 if __name__ == "__main__":
