@@ -9,7 +9,7 @@
 
 ## References
 
-- W&B ML Ops course: 
+- W&B ML Ops course: https://github.com/wandb/edu
 - https://docs.wandb.ai/guides/integrations/huggingface
 - https://docs.wandb.ai/guides/track
 - https://www.philschmid.de/huggingface-hub-amazon-sagemaker
