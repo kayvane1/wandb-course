@@ -4,7 +4,7 @@
 
 | Assignment      | Colab | W&B Report | Description |
 | ----------- | ----------- | -------| ------|
-| Week 2 - Complaints Allocation Hyperparameter Sweep   | Colab        |Report| The notebook is split into python files for maintainability and parameterised to allow the team to easily experiment with multiple models available on the huggingface hub as well as introducing hyperparameter optimisation using W&B Sweeps|
+| Week 2 - Complaints Allocation Hyperparameter Sweep   | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1mvUHh_uLOS7TZBUjfXjr_hPCBxvLg-g-?usp=sharing)     | [![Visualise in W&B](https://raw.githubusercontent.com/wandb/assets/main/wandb-github-badge-gradient.svg)](https://wandb.ai/kayvane/wandb-week-2-complaints-classifier/reports/Complaints-Allocation-with-Sweeps--VmlldzoyMzI5MTQw?accessToken=y5gvb2af7vb9bscetht3c02j5af34q5z65vifnfpshhd4j5uaqbdh5y33vjxfxys)| The notebook is split into python files for maintainability and parameterised to allow the team to easily experiment with multiple models available on the huggingface hub as well as introducing hyperparameter optimisation using W&B Sweeps|
 
 ## Improvements:
 
@@ -60,7 +60,7 @@ We need to set the number of runs we want to trial with the --count arg, as our 
 
 In this sweep we are looking to maximize f1, but parameterising the sweep in this way also allows us to change the optimisation metric with ease and evaluate/compare the model's performance seperately in a W&B Report.
 
-We also use the `early_terminate` option which uses the `hyperband
+We also use the `early_terminate` option which uses the `hyperband` algorithm
 
 ```
 program: train.py
@@ -88,3 +88,9 @@ parameters:
     min: 1e-5
     max: 1e-3
 ```
+
+References:
+- W&B ML Ops course: https://github.com/wandb/edu
+- https://docs.wandb.ai/guides/integrations/huggingface
+- https://docs.wandb.ai/guides/track
+- https://docs.wandb.ai/guides/sweeps
