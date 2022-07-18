@@ -15,6 +15,8 @@ from ml_collections import config_dict
 import wandb
 import os
 from wandb.beta.workflows import log_model, use_model
+from huggingface_hub import HfApi
+import os
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -112,11 +114,11 @@ def compute_metrics(eval_pred):
     predictions = np.argmax(predictions, axis=1)  # predictions.argmax(-1)
     acc = accuracy_metric.compute(predictions=predictions, references=labels)
     recall = recall_metric.compute(
-        predictions=predictions, references=labels, average="macro"
+        predictions=predictions, references=labels, average="weighted"
     )
-    f1 = f1_metric.compute(predictions=predictions, references=labels, average="macro")
+    f1 = f1_metric.compute(predictions=predictions, references=labels, average="weighted")
     precision = precision_metric.compute(
-        predictions=predictions, references=labels, average="macro"
+        predictions=predictions, references=labels, average="weighted"
     )
 
     return {
@@ -173,11 +175,11 @@ def train(cfg):
             learning_rate=float(cfg.learning_rate),
             # logging & evaluation strategies
             logging_dir=f"{cfg.MODEL_DATA_FOLDER}/logs",
-            logging_steps=50,
+            logging_steps=100,
             evaluation_strategy="steps",
-            eval_steps=500,
+            eval_steps=2000,
             save_strategy="steps",
-            save_steps=500,
+            save_steps=2000,
             save_total_limit=2,
             load_best_model_at_end=True,
             metric_for_best_model="f1",
@@ -186,6 +188,7 @@ def train(cfg):
             push_to_hub=cfg.PUSH_TO_HUB,
             hub_strategy=cfg.HUB_STRATEGY,
             hub_model_id=f"{cfg.model_name}-{cfg.PROJECT_NAME}-{cfg.warmup_steps}",
+            overwrite_output_dir=True
         )
 
         train_dataset, test_dataset = load_data(run, cfg)
@@ -223,13 +226,13 @@ def train(cfg):
 
         if cfg.log_model:
             trainer.save_model()
-
-# def get_champion_metrics(cfg):
-#     champion_model = use_model("model-registry/sub-product-classification").model_obj()
-#     champion_model.load_state_dict(torch.load(cfg.champion_model_path))
-#     champion_model.eval()
-#     return champion_model
-
+            # log model to weights and biases
+            hf_api = HfApi()
+            user = hf_api.whoami()
+            trained_model_art = wandb.Artifact(cfg.HUB_MODEL_ID, type=cfg.MODEL_TYPE)
+            hub_id = f"{user['name']}/{cfg.HUB_MODEL_ID}"
+            trained_model_art.metadata = {"hub_id": hub_id}
+            run.log_artifact(trained_model_art, aliases=["latest"])
 
 if __name__ == "__main__":
     default_cfg.update(vars(parse_args()))
