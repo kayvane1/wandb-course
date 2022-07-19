@@ -61,3 +61,7 @@ The ML Team use the HuggingFace Hub to store to back up their dataset every day,
 
 # The Dataset
 
+For this demonstration we'll be using the Consumer Complaint Database which is available on the HuggingFace Hub as a Dataset. This database is a collection of complaints about consumer financial products and services that were sent to companies for response.
+
+
+The Consumer Complaint Database is a collection of complaints about consumer financial products and services that we sent to companies for response. Complaints are published after the company responds, confirming a commercial relationship with the consumer, or after 15 days, whichever comes first. Complaints referred to other regulators, such as complaints about depository institutions with less than $10 billion in assets, are not published in the Consumer Complaint Database. The database generally updates daily. Having a dataset which updates over time is helpful for ML Ops projects and demos as they show more real life scenarios such as new categories of data emerging (concept drift) , changing distributions (data drift) and can be helpful to also backtest performance thanks to timestamps forming part of the dataset.
