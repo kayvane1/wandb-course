@@ -110,12 +110,12 @@ def evaluate(cfg):
         cfg = wandb.config
 
         artifact = run.use_artifact(cfg.model_id, type='model')
-        artifact_dir = artifact.download()
-        model_path = Path(artifact_dir).absolute()/'model'
+        #artifact_dir = artifact.download()
+        #model_path = Path(artifact_dir).absolute()/'model'
         
         producer_run = artifact.logged_by()
         cfg.model_name = producer_run.config['model_name']
-        cfg.hubid = producer_run.config['hub_id']
+        cfg.hub_id = producer_run.config['hub_id']
         
         wandb.config.update(cfg)
         
@@ -142,13 +142,13 @@ def evaluate(cfg):
         number_classes = val_dataset.features["labels"].num_classes
         id2label = val_dataset.features["labels"].int2str
 
-        tokenizer = AutoTokenizer.from_pretrained(cfg.model_name)
+        tokenizer = AutoTokenizer.from_pretrained(cfg.hub_id)
         
         # define data_collator
         data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
         model = AutoModelForSequenceClassification.from_pretrained(
-            cfg.model_name,
+            cfg.hub_id,
             problem_type="single_label_classification",
             num_labels=number_classes,
         )
@@ -165,7 +165,7 @@ def evaluate(cfg):
         outputs = trainer.evaluate()
 
         outputs_df = pd.DataFrame(data=outputs)
-        run.log({f"{cfg.model_id}-performance": wandb.Table(dataframe=outputs_df)})
+        run.log({f"{cfg.hub_id}-performance": wandb.Table(dataframe=outputs_df)})
 
 if __name__ == "__main__":
     default_cfg.update(vars(parse_args()))
