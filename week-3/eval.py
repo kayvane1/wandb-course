@@ -17,7 +17,6 @@ import os
 from wandb.beta.workflows import log_model, use_model
 from huggingface_hub import HfApi
 import os
-import Path
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -45,10 +44,10 @@ def parse_args():
         description="Process base parameters & hyper-parameters"
     )
     argparser.add_argument(
-        "--model_name",
+        "--model_id",
         type=str,
-        default=default_cfg.model_name,
-        help="Weights & Biases Alias to retrieve",
+        default=default_cfg.model_id,
+        help="Weights & Biases model id to retrieve",
     )
     return argparser.parse_args()
 
@@ -86,7 +85,7 @@ def load_data(run, cfg):
     _ = val_artifact.download(root=cfg.VAL_DATA_FOLDER)
     val_dataset = load_from_disk(cfg.VAL_DATA_FOLDER)
 
-    tokenizer = AutoTokenizer.from_pretrained(cfg.model_name)
+    tokenizer = AutoTokenizer.from_pretrained(cfg.hub_id)
 
     # tokenizer helper function
     def _tokenize(batch):
@@ -115,7 +114,7 @@ def evaluate(cfg):
         
         producer_run = artifact.logged_by()
         cfg.model_name = producer_run.config['model_name']
-        cfg.hub_id = producer_run.config['hub_id']
+        cfg.hub_id = artifact.metadata['hub_id']
         
         wandb.config.update(cfg)
         
@@ -126,10 +125,6 @@ def evaluate(cfg):
             # logging & evaluation strategies
             logging_dir=f"{cfg.MODEL_DATA_FOLDER}/logs",
             logging_steps=50,
-            evaluation_strategy="steps",
-            eval_steps=1500,
-            load_best_model_at_end=True,
-            metric_for_best_model="f1",
             report_to="wandb",
         )
 
@@ -164,8 +159,8 @@ def evaluate(cfg):
 
         outputs = trainer.evaluate()
 
-        outputs_df = pd.DataFrame(data=outputs)
-        run.log({f"{cfg.hub_id}-performance": wandb.Table(dataframe=outputs_df)})
+        outputs_df = pd.DataFrame(data=outputs, index=[0])
+        run.log({f"{cfg.model_id}-performance": wandb.Table(dataframe=outputs_df)})
 
 if __name__ == "__main__":
     default_cfg.update(vars(parse_args()))
