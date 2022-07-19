@@ -98,7 +98,7 @@ def parse_args():
         help="Whether to use floating point precision",
     )
     argparser.add_argument(
-        "--log_model", action="store_true", help="log best model W&B"
+        "--log_model", action="store_false", help="log best model W&B"
     )
     return argparser.parse_args()
 
@@ -177,9 +177,9 @@ def train(cfg):
             logging_dir=f"{cfg.MODEL_DATA_FOLDER}/logs",
             logging_steps=100,
             evaluation_strategy="steps",
-            eval_steps=2000,
+            eval_steps=1500,
             save_strategy="steps",
-            save_steps=2000,
+            save_steps=1500,
             save_total_limit=2,
             load_best_model_at_end=True,
             metric_for_best_model="f1",
